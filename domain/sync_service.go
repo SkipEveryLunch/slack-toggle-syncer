@@ -43,9 +43,13 @@ func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
 			continue
 		}
 
-		projectID, ok := s.ProjectMap[parent.ProjectName]
-		if !ok {
-			return fmt.Errorf("project %q is not defined in projects.toml", parent.ProjectName)
+		var projectID int64
+		if parent.ProjectName != "" {
+			var ok bool
+			projectID, ok = s.ProjectMap[parent.ProjectName]
+			if !ok {
+				return fmt.Errorf("project %q is not defined in projects.toml", parent.ProjectName)
+			}
 		}
 
 		for _, session := range sessions {

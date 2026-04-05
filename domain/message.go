@@ -21,9 +21,10 @@ type ParentMessage struct {
 	MessageID   string
 }
 
-var parentMessageRegex = regexp.MustCompile(`^\[(.+?)\]\[(.+?)\]`)
+var parentMessageRegex = regexp.MustCompile(`^\[(.*?)\]\[(.+?)\]`)
 
 // ParseParentMessage SourceMessageを[project][task]形式としてパースする。
+// projectは空文字も許容する（[][task]でプロジェクト未指定）。
 // マッチしない場合はfalseを返す。
 func ParseParentMessage(msg *SourceMessage) (*ParentMessage, bool) {
 	matches := parentMessageRegex.FindStringSubmatch(msg.Text)
