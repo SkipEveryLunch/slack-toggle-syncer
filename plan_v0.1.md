@@ -180,7 +180,7 @@ type CreateTimeEntryRequest struct {
 
 ### フェーズ1: 基盤（動くプロジェクトの骨格を作る）
 
-**ゴール:** `go run .` が通り、設定を読み込んで起動できる
+**ゴール:** `make run` でコンテナが起動し、設定を読み込んで終了できる
 
 - [ ] `go mod init github.com/yourusername/slack-toggle-syncer`
 - [ ] 依存ライブラリを`go get`
@@ -188,6 +188,29 @@ type CreateTimeEntryRequest struct {
 - [ ] `config/config.toml.tmpl` 作成（Slack・Togglの設定項目を定義）
 - [ ] `config/config.go` 実装（sigil で環境変数展開 → TOML パース → バリデーション）
 - [ ] `main.go` 骨格（設定読み込み → ログ出力して終了）
+- [ ] `Dockerfile` 作成（マルチステージビルド、タイムゾーンはAsia/Tokyo）
+- [ ] `Makefile` 作成（`make run` でビルド＆コンテナ実行）
+
+**Dockerfileの方針（cannonical踏襲）:**
+```dockerfile
+# Build stage
+FROM golang:1.24-alpine AS builder
+# ... go build -o main .
+
+# Run stage
+FROM alpine:3.21
+# タイムゾーン設定（JST）
+# config.toml.tmplをコピー
+# non-rootユーザーで実行
+```
+
+**Makefileの方針:**
+```makefile
+# .envを読み込んでdocker runで環境変数として渡す
+run:
+    docker build -t slack-toggle-syncer .
+    docker run --rm --env-file .env slack-toggle-syncer
+```
 
 ---
 
