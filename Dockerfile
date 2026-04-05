@@ -18,6 +18,7 @@ RUN apk add --no-cache tzdata && \
     adduser -D -s /bin/sh -u 1000 -G appuser appuser
 
 COPY --from=builder /app/main .
+COPY --from=builder /app/config/config.toml.tmpl ./config/config.toml.tmpl
 
 USER appuser
 

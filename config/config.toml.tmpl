@@ -1,0 +1,11 @@
+[main]
+log_level = "${LOG_LEVEL:-"info"}"
+
+[slack]
+token      = "${SLACK_BOT_TOKEN}"
+channel_id = "${SLACK_CHANNEL_ID}"
+
+[toggl]
+api_token    = "${TOGGL_API_TOKEN}"
+workspace_id = ${TOGGL_WORKSPACE_ID}
+project_id   = ${TOGGL_PROJECT_ID:-0}

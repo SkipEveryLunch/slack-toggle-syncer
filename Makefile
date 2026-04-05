@@ -6,4 +6,4 @@ build:
 	docker build -t $(IMAGE_NAME) .
 
 run: build
-	docker run --rm $(IMAGE_NAME)
+	docker run --rm --env-file .env $(IMAGE_NAME)
