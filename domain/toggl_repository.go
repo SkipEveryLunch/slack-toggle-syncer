@@ -2,12 +2,12 @@ package domain
 
 import "context"
 
-type TogglEntry struct {
+type DeleteTogglEntry struct {
 	ID int64
 }
 
 type TogglRepository interface {
-	FindTodayEntries(ctx context.Context) ([]*TogglEntry, error)
+	FindTodayEntries(ctx context.Context) ([]*DeleteTogglEntry, error)
 	DeleteEntry(ctx context.Context, id int64) error
-	CreateTimeEntry(ctx context.Context, entry *TimeEntry) error
+	CreateTogglEntry(ctx context.Context, entry *TogglEntry) error
 }

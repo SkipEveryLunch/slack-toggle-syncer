@@ -27,7 +27,7 @@ func NewTogglRepository(cfg config.Toggl) domain.TogglRepository {
 	}
 }
 
-func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.TogglEntry, error) {
+func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.DeleteTogglEntry, error) {
 	now := time.Now().In(domain.JST)
 	today := now.Format("2006-01-02")
 	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
@@ -57,9 +57,9 @@ func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.Toggl
 		return nil, fmt.Errorf("json.Decode: %w", err)
 	}
 
-	entries := make([]*domain.TogglEntry, len(raw))
+	entries := make([]*domain.DeleteTogglEntry, len(raw))
 	for i, e := range raw {
-		entries[i] = &domain.TogglEntry{ID: e.ID}
+		entries[i] = &domain.DeleteTogglEntry{ID: e.ID}
 	}
 	return entries, nil
 }
@@ -95,14 +95,14 @@ type createTimeEntryRequest struct {
 	CreatedWith string `json:"created_with"`
 }
 
-func (r *togglRepository) CreateTimeEntry(ctx context.Context, entry *domain.TimeEntry) error {
+func (r *togglRepository) CreateTogglEntry(ctx context.Context, entry *domain.TogglEntry) error {
 	body := createTimeEntryRequest{
 		Description: entry.Description,
 		Start:       entry.Start.Format("2006-01-02T15:04:05-07:00"),
 		Stop:        entry.End.Format("2006-01-02T15:04:05-07:00"),
 		Duration:    int64(entry.End.Sub(entry.Start).Seconds()),
 		WorkspaceID: r.workspaceID,
-		ProjectID:   entry.ProjectID,
+		ProjectID:   int64(entry.ProjectID),
 		CreatedWith: "slack-toggle-syncer",
 	}
 

@@ -27,19 +27,15 @@ func main() {
 	sourceRepo := infra_slack.NewSourceRepository(cfg.Slack)
 	togglRepo := infra_toggl.NewTogglRepository(cfg.Toggl)
 
-	syncService := &domain.SyncServiceImpl{
-		SourceRepo: sourceRepo,
-		ProjectMap: cfg.Toggl.Projects,
-	}
-
-	togglService := &domain.TogglServiceImpl{
-		TogglRepo: togglRepo,
+	projects := make(map[domain.ProjectName]domain.ProjectID, len(cfg.Toggl.Projects))
+	for k, v := range cfg.Toggl.Projects {
+		projects[domain.ProjectName(k)] = domain.ProjectID(v)
 	}
 
 	usecase := &application.SyncUsecase{
-		SyncService:  syncService,
-		TogglService: togglService,
-		TogglRepo:    togglRepo,
+		SlackRepo: sourceRepo,
+		TogglRepo: togglRepo,
+		Projects:  projects,
 	}
 
 	ctx := context.Background()

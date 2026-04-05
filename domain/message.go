@@ -10,6 +10,14 @@ import (
 
 var JST = time.FixedZone("Asia/Tokyo", 9*60*60)
 
+type ProjectName string
+
+func (p ProjectName) IsEmpty() bool { return p == "" }
+
+type ProjectID int64
+
+func (p ProjectID) IsUnset() bool { return p == 0 }
+
 type SourceMessage struct {
 	Text      string
 	Timestamp time.Time

@@ -2,9 +2,9 @@ package domain
 
 import "time"
 
-type TimeEntry struct {
+type TogglEntry struct {
 	Description string
 	Start       time.Time
 	End         time.Time
-	ProjectID   int64
+	ProjectID   ProjectID
 }
