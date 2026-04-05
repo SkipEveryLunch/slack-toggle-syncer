@@ -5,9 +5,13 @@ import (
 	"log"
 	"os"
 
-	"github.com/SkipEveryLunch/slack-toggle-syncer/config"
-	infra_slack "github.com/SkipEveryLunch/slack-toggle-syncer/infrastructure/slack"
 	"go.uber.org/zap"
+
+	"github.com/SkipEveryLunch/slack-toggle-syncer/application"
+	"github.com/SkipEveryLunch/slack-toggle-syncer/config"
+	"github.com/SkipEveryLunch/slack-toggle-syncer/domain"
+	infra_slack "github.com/SkipEveryLunch/slack-toggle-syncer/infrastructure/slack"
+	infra_toggl "github.com/SkipEveryLunch/slack-toggle-syncer/infrastructure/toggl"
 )
 
 func main() {
@@ -27,19 +31,22 @@ func main() {
 	}
 	defer logger.Sync()
 
-	ctx := context.Background()
-
 	sourceRepo := infra_slack.NewSourceRepository(cfg.Slack)
-	messages, err := sourceRepo.FindTodayMessages(ctx)
-	if err != nil {
-		logger.Fatal("sourceRepo.FindTodayMessages", zap.Error(err))
+	togglRepo := infra_toggl.NewTogglRepository(cfg.Toggl)
+
+	syncService := &domain.SyncServiceImpl{
+		SourceRepo: sourceRepo,
+		TogglRepo:  togglRepo,
+		ProjectID:  cfg.Toggl.ProjectID,
+		Logger:     logger,
 	}
 
-	logger.Info("fetched messages", zap.Int("count", len(messages)))
-	for _, msg := range messages {
-		logger.Info("message",
-			zap.Time("timestamp", msg.Timestamp),
-			zap.String("text", msg.Text),
-		)
+	usecase := &application.SyncUsecase{SyncService: syncService}
+
+	ctx := context.Background()
+	if err := usecase.Run(ctx); err != nil {
+		logger.Fatal("usecase.Run", zap.Error(err))
 	}
+
+	logger.Info("sync completed")
 }

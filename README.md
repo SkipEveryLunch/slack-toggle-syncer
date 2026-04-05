@@ -2,6 +2,18 @@
 
 Slackのtimesチャンネルの今日の投稿を読み取り、Toggl Trackにタイムエントリとして記録するCLIツール。
 
+## 使い方
+
+Slackのtimesチャンネルに作業内容を投稿するだけでOK。
+
+```
+朝会終わり
+コードレビュー開始
+APIの設計中
+```
+
+`make run` を実行すると、各投稿の時刻を開始・終了時刻としてTogglに登録される。
+
 ## セットアップ
 
 ### 1. Slack Appの作成
@@ -21,7 +33,15 @@ Slackのtimesチャンネルの今日の投稿を読み取り、Toggl Trackに�
 /invite @your-app-name
 ```
 
-### 3. 環境変数の設定
+### 3. Togglの設定
+
+| 項目 | 取得方法 |
+|---|---|
+| `TOGGL_API_TOKEN` | [track.toggl.com](https://track.toggl.com) → 左下アイコン → **Profile** → **Profile Settings** → 一番下の **API Token** |
+| `TOGGL_WORKSPACE_ID` | [track.toggl.com](https://track.toggl.com) → **Workspaces** → **Settings** → URLの `workspaces/xxxxxxxx` の数字部分 |
+| `TOGGL_PROJECT_ID` | プロジェクトに紐付けない場合は `0` |
+
+### 4. 環境変数の設定
 
 `.env` ファイルをプロジェクトルートに作成する。
 
@@ -29,8 +49,8 @@ Slackのtimesチャンネルの今日の投稿を読み取り、Toggl Trackに�
 LOG_LEVEL=info
 SLACK_BOT_TOKEN=xoxb-xxxxxxxxxxxxxxxxx
 SLACK_CHANNEL_ID=Cxxxxxxxxxx
-TOGGL_API_TOKEN=
-TOGGL_WORKSPACE_ID=
+TOGGL_API_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TOGGL_WORKSPACE_ID=12345678
 TOGGL_PROJECT_ID=0
 ```
 
