@@ -1,1 +1,3 @@
 /cannonical/*
+.env
+config.toml
