@@ -8,24 +8,24 @@ import (
 )
 
 type SyncService interface {
-	SyncToday(ctx context.Context) error
+	BuildTodayEntries(ctx context.Context) ([]*TimeEntry, error)
 }
 
 type SyncServiceImpl struct {
 	SourceRepo SourceRepository
-	TogglRepo  TogglRepository
 	ProjectMap map[string]int64
 }
 
-func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
+func (s *SyncServiceImpl) BuildTodayEntries(ctx context.Context) ([]*TimeEntry, error) {
 	now := time.Now().In(JST)
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, JST)
 
 	messages, err := s.SourceRepo.FindMessages(ctx, startOfDay, now)
 	if err != nil {
-		return fmt.Errorf("SourceRepo.FindMessages: %w", err)
+		return nil, fmt.Errorf("SourceRepo.FindMessages: %w", err)
 	}
 
+	var entries []*TimeEntry
 	for _, msg := range messages {
 		parent, ok := ParseParentMessage(msg)
 		if !ok {
@@ -34,7 +34,7 @@ func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
 
 		replies, err := s.SourceRepo.FindThreadReplies(ctx, parent.MessageID)
 		if err != nil {
-			return fmt.Errorf("SourceRepo.FindThreadReplies (messageID=%s): %w", parent.MessageID, err)
+			return nil, fmt.Errorf("SourceRepo.FindThreadReplies (messageID=%s): %w", parent.MessageID, err)
 		}
 
 		sessions := BuildSessions(replies, now)
@@ -48,27 +48,18 @@ func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
 			var ok bool
 			projectID, ok = s.ProjectMap[parent.ProjectName]
 			if !ok {
-				return fmt.Errorf("project %q is not defined in projects.toml", parent.ProjectName)
+				return nil, fmt.Errorf("project %q is not defined in projects.toml", parent.ProjectName)
 			}
 		}
 
 		for _, session := range sessions {
-			entry := &TimeEntry{
+			entries = append(entries, &TimeEntry{
 				Description: parent.TaskName,
 				Start:       session.Start,
 				End:         session.End,
 				ProjectID:   projectID,
-			}
-			if err := s.TogglRepo.CreateTimeEntry(ctx, entry); err != nil {
-				return fmt.Errorf("TogglRepo.CreateTimeEntry: %w", err)
-			}
-			slog.Info("created time entry",
-				"project", parent.ProjectName,
-				"task", parent.TaskName,
-				"start", session.Start.Format("15:04"),
-				"end", session.End.Format("15:04"),
-			)
+			})
 		}
 	}
-	return nil
+	return entries, nil
 }

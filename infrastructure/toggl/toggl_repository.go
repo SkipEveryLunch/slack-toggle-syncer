@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/SkipEveryLunch/slack-toggle-syncer/config"
 	"github.com/SkipEveryLunch/slack-toggle-syncer/domain"
@@ -24,6 +25,64 @@ func NewTogglRepository(cfg config.Toggl) domain.TogglRepository {
 		apiToken:    cfg.APIToken,
 		workspaceID: cfg.WorkspaceID,
 	}
+}
+
+func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.TogglEntry, error) {
+	now := time.Now().In(domain.JST)
+	today := now.Format("2006-01-02")
+	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
+	url := fmt.Sprintf("%s/me/time_entries?start_date=%s&end_date=%s", baseURL, today, tomorrow)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("http.NewRequest: %w", err)
+	}
+	req.SetBasicAuth(r.apiToken, "api_token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http.Do: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("toggl API error: status=%d body=%s", resp.StatusCode, string(b))
+	}
+
+	var raw []struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("json.Decode: %w", err)
+	}
+
+	entries := make([]*domain.TogglEntry, len(raw))
+	for i, e := range raw {
+		entries[i] = &domain.TogglEntry{ID: e.ID}
+	}
+	return entries, nil
+}
+
+func (r *togglRepository) DeleteEntry(ctx context.Context, id int64) error {
+	url := fmt.Sprintf("%s/workspaces/%d/time_entries/%d", baseURL, r.workspaceID, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return fmt.Errorf("http.NewRequest: %w", err)
+	}
+	req.SetBasicAuth(r.apiToken, "api_token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("http.Do: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("toggl API error: status=%d body=%s", resp.StatusCode, string(b))
+	}
+	return nil
 }
 
 type createTimeEntryRequest struct {
@@ -58,7 +117,6 @@ func (r *togglRepository) CreateTimeEntry(ctx context.Context, entry *domain.Tim
 		return fmt.Errorf("http.NewRequest: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// Toggl APIの認証: Basic認証でapi_tokenをユーザー名、"api_token"をパスワードとして使う
 	req.SetBasicAuth(r.apiToken, "api_token")
 
 	resp, err := http.DefaultClient.Do(req)

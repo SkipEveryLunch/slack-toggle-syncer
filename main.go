@@ -29,11 +29,18 @@ func main() {
 
 	syncService := &domain.SyncServiceImpl{
 		SourceRepo: sourceRepo,
-		TogglRepo:  togglRepo,
 		ProjectMap: cfg.Toggl.Projects,
 	}
 
-	usecase := &application.SyncUsecase{SyncService: syncService}
+	togglService := &domain.TogglServiceImpl{
+		TogglRepo: togglRepo,
+	}
+
+	usecase := &application.SyncUsecase{
+		SyncService:  syncService,
+		TogglService: togglService,
+		TogglRepo:    togglRepo,
+	}
 
 	ctx := context.Background()
 	if err := usecase.Run(ctx); err != nil {
