@@ -23,16 +23,11 @@ func NewSourceRepository(cfg config.Slack) domain.SourceRepository {
 	}
 }
 
-func (r *sourceRepository) FindTodayMessages(ctx context.Context) ([]*domain.SourceMessage, error) {
-	// JSTの今日00:00〜23:59:59をUNIXタイムスタンプで指定する
-	now := time.Now().In(domain.JST)
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, domain.JST)
-	endOfDay := startOfDay.Add(24*time.Hour - time.Second)
-
+func (r *sourceRepository) FindMessages(ctx context.Context, oldest, latest time.Time) ([]*domain.SourceMessage, error) {
 	params := slack.GetConversationHistoryParameters{
 		ChannelID: r.channelID,
-		Oldest:    fmt.Sprintf("%d", startOfDay.Unix()),
-		Latest:    fmt.Sprintf("%d", endOfDay.Unix()),
+		Oldest:    fmt.Sprintf("%d", oldest.Unix()),
+		Latest:    fmt.Sprintf("%d", latest.Unix()),
 		Inclusive: true,
 		Limit:     200,
 	}
@@ -52,10 +47,6 @@ func (r *sourceRepository) FindTodayMessages(ctx context.Context) ([]*domain.Sou
 
 	outs := make([]*domain.SourceMessage, 0, len(allMessages))
 	for _, msg := range allMessages {
-		// Bot・システムメッセージを除外する
-		if msg.BotID != "" || msg.User == "USLACKBOT" || msg.SubType != "" {
-			continue
-		}
 		ts, err := domain.ParseSlackTimestamp(msg.Timestamp)
 		if err != nil {
 			return nil, fmt.Errorf("domain.ParseSlackTimestamp: %w", err)
@@ -63,6 +54,36 @@ func (r *sourceRepository) FindTodayMessages(ctx context.Context) ([]*domain.Sou
 		outs = append(outs, &domain.SourceMessage{
 			Text:      msg.Text,
 			Timestamp: ts,
+			MessageID: msg.Timestamp,
+		})
+	}
+	return outs, nil
+}
+
+func (r *sourceRepository) FindThreadReplies(ctx context.Context, messageID string) ([]*domain.SourceMessage, error) {
+	replies, _, _, err := r.client.GetConversationRepliesContext(ctx, &slack.GetConversationRepliesParameters{
+		ChannelID: r.channelID,
+		Timestamp: messageID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("client.GetConversationReplies: %w", err)
+	}
+
+	// 最初の要素は親投稿自体なのでスキップ
+	if len(replies) <= 1 {
+		return nil, nil
+	}
+
+	outs := make([]*domain.SourceMessage, 0, len(replies)-1)
+	for _, msg := range replies[1:] {
+		ts, err := domain.ParseSlackTimestamp(msg.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("domain.ParseSlackTimestamp: %w", err)
+		}
+		outs = append(outs, &domain.SourceMessage{
+			Text:      msg.Text,
+			Timestamp: ts,
+			MessageID: msg.Timestamp,
 		})
 	}
 	return outs, nil

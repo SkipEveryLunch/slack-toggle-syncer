@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sort"
 	"time"
 )
 
@@ -19,52 +18,48 @@ type SyncServiceImpl struct {
 }
 
 func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
-	messages, err := s.SourceRepo.FindTodayMessages(ctx)
+	now := time.Now().In(JST)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, JST)
+
+	messages, err := s.SourceRepo.FindMessages(ctx, startOfDay, now)
 	if err != nil {
-		return fmt.Errorf("SourceRepo.FindTodayMessages: %w", err)
-	}
-	if len(messages) == 0 {
-		slog.Info("no messages found today")
-		return nil
+		return fmt.Errorf("SourceRepo.FindMessages: %w", err)
 	}
 
-	// Slack APIは新しい順で返すので古い順に並び替える
-	sort.Slice(messages, func(i, j int) bool {
-		return messages[i].Timestamp.Before(messages[j].Timestamp)
-	})
-
-	entries := buildTimeEntries(messages, s.ProjectID)
-
-	for _, entry := range entries {
-		if err := s.TogglRepo.CreateTimeEntry(ctx, entry); err != nil {
-			return fmt.Errorf("TogglRepo.CreateTimeEntry: %w", err)
+	for _, msg := range messages {
+		parent, ok := ParseParentMessage(msg)
+		if !ok {
+			continue
 		}
-		slog.Info("created time entry",
-			"description", entry.Description,
-			"start", entry.Start.Format("15:04"),
-			"end", entry.End.Format("15:04"),
-		)
+
+		replies, err := s.SourceRepo.FindThreadReplies(ctx, parent.MessageID)
+		if err != nil {
+			return fmt.Errorf("SourceRepo.FindThreadReplies (messageID=%s): %w", parent.MessageID, err)
+		}
+
+		sessions := BuildSessions(replies, now)
+		if len(sessions) == 0 {
+			slog.Info("no sessions found", "project", parent.ProjectName, "task", parent.TaskName)
+			continue
+		}
+
+		for _, session := range sessions {
+			entry := &TimeEntry{
+				Description: parent.TaskName,
+				Start:       session.Start,
+				End:         session.End,
+				ProjectID:   s.ProjectID,
+			}
+			if err := s.TogglRepo.CreateTimeEntry(ctx, entry); err != nil {
+				return fmt.Errorf("TogglRepo.CreateTimeEntry: %w", err)
+			}
+			slog.Info("created time entry",
+				"project", parent.ProjectName,
+				"task", parent.TaskName,
+				"start", session.Start.Format("15:04"),
+				"end", session.End.Format("15:04"),
+			)
+		}
 	}
 	return nil
-}
-
-// buildTimeEntries メッセージ一覧をタイムエントリに変換する。
-// 開始時刻 = そのメッセージの投稿時刻、終了時刻 = 次のメッセージの投稿時刻。
-// 最後のメッセージの終了時刻は現在時刻。
-func buildTimeEntries(messages []*SourceMessage, projectID int64) []*TimeEntry {
-	now := time.Now().In(JST)
-	entries := make([]*TimeEntry, len(messages))
-	for i, msg := range messages {
-		end := now
-		if i+1 < len(messages) {
-			end = messages[i+1].Timestamp
-		}
-		entries[i] = &TimeEntry{
-			Description: msg.Text,
-			Start:       msg.Timestamp,
-			End:         end,
-			ProjectID:   projectID,
-		}
-	}
-	return entries
 }
