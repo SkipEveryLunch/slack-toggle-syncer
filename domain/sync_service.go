@@ -14,7 +14,7 @@ type SyncService interface {
 type SyncServiceImpl struct {
 	SourceRepo SourceRepository
 	TogglRepo  TogglRepository
-	ProjectID  int64
+	ProjectMap map[string]int64
 }
 
 func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
@@ -43,12 +43,17 @@ func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
 			continue
 		}
 
+		projectID, ok := s.ProjectMap[parent.ProjectName]
+		if !ok {
+			return fmt.Errorf("project %q is not defined in projects.toml", parent.ProjectName)
+		}
+
 		for _, session := range sessions {
 			entry := &TimeEntry{
 				Description: parent.TaskName,
 				Start:       session.Start,
 				End:         session.End,
-				ProjectID:   s.ProjectID,
+				ProjectID:   projectID,
 			}
 			if err := s.TogglRepo.CreateTimeEntry(ctx, entry); err != nil {
 				return fmt.Errorf("TogglRepo.CreateTimeEntry: %w", err)

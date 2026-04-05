@@ -1,0 +1,6 @@
+# config/projects.toml としてコピーして使う（gitignore対象）
+# Slackの[project_name]とTogglのProject IDを対応付ける
+
+[projects]
+# backend  = 123456789
+# frontend = 987654321

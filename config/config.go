@@ -26,9 +26,13 @@ type Slack struct {
 }
 
 type Toggl struct {
-	APIToken    string `toml:"api_token" validate:"required"`
-	WorkspaceID int64  `toml:"workspace_id" validate:"required"`
-	ProjectID   int64  `toml:"project_id"`
+	APIToken    string           `toml:"api_token" validate:"required"`
+	WorkspaceID int64            `toml:"workspace_id" validate:"required"`
+	Projects    map[string]int64 // projects.toml から別途読み込む
+}
+
+type projects struct {
+	Projects map[string]int64 `toml:"projects"`
 }
 
 func New(path string) (*Config, error) {
@@ -59,6 +63,16 @@ func New(path string) (*Config, error) {
 	v := validator.New()
 	if err := v.Struct(cfg); err != nil {
 		return nil, fmt.Errorf("validator.Struct: %w", err)
+	}
+
+	// projects.toml が存在すればプロジェクトマッピングを読み込む（なくてもエラーにしない）
+	projectsPath := filepath.Join(filepath.Dir(path), "projects.toml")
+	if _, err := os.Stat(projectsPath); err == nil {
+		var p projects
+		if _, err := toml.DecodeFile(projectsPath, &p); err != nil {
+			return nil, fmt.Errorf("toml.DecodeFile projects.toml: %w", err)
+		}
+		cfg.Toggl.Projects = p.Projects
 	}
 
 	return cfg, nil

@@ -30,7 +30,7 @@ func main() {
 	syncService := &domain.SyncServiceImpl{
 		SourceRepo: sourceRepo,
 		TogglRepo:  togglRepo,
-		ProjectID:  cfg.Toggl.ProjectID,
+		ProjectMap: cfg.Toggl.Projects,
 	}
 
 	usecase := &application.SyncUsecase{SyncService: syncService}
