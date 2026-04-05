@@ -1,142 +1,141 @@
 # slack-toggle-syncer v0.2 実装計画
 
-## v0.1からの変更点
+## v0.1からの変更概要
 
-記法をスレッド型に刷新し、より細かい粒度でタスク・プロジェクトを管理できるようにする。
+- Slackの書式をスレッド型に刷新（`[project][task]` + `:wip`/`:done`/`:todo`）
+- Repository を薄くしてビジネスロジックをドメイン層に移す
+- プロジェクトマッピング（プロジェクト名 → Toggl Project ID）
+- 重複登録防止（state file）
 
 ---
 
 ## 新しい書式
 
-### 基本フォーマット
-
-チャンネルに親投稿を立てて、スレッドで `:wip` / `:done` をテキストとして返信する。
-（絵文字リアクションではなくテキスト投稿。リアクション対応はv0.3以降。）
-
 ```
 [backend][API設計]       ← 親投稿（プロジェクト名・タスク名）
   └ :wip                ← 作業開始（スレッド返信）
-  └ :done               ← 作業終了（スレッド返信）
+  └ :todo               ← 中断（スレッド返信）
+  └ :wip                ← 再開
+  └ :done               ← 完了（スレッド返信）
 ```
 
-### 終了マーカーは2種類
+### マーカーの扱い
 
-- `:done` — タスク完了
-- `:todo` — 中断（後で再開予定）
-
-どちらもセッションの終了時刻として同様に扱う。
-
-### 複数セッションも対応
-
-```
-[backend][API設計]
-  └ :wip    (10:00)
-  └ :todo   (11:00)     ← 中断
-  └ :wip    (13:00)     ← 午後に再開
-  └ :done   (14:30)     ← 完了
-```
-→ Togglに2エントリ登録: 10:00-11:00 と 13:00-14:30
-
-### `:done`/`:todo` がないまま `:wip` の場合
-
-作業中とみなし、記録実行時刻を終了時刻として登録する。
-
-```
-[backend][API設計]
-  └ :wip    (10:00)
-  └ :wip    (11:00)     ← 10:00〜11:00 のエントリを実行時刻で締めて登録
-                           11:00〜 のエントリも実行時刻で締めて登録
-```
+| パターン | 終了時刻 |
+|---|---|
+| `:wip` → `:done` | `:done` の投稿時刻 |
+| `:wip` → `:todo` | `:todo` の投稿時刻 |
+| `:wip` → `:wip` | 次の `:wip` の投稿時刻 |
+| `:wip` のまま（未完了） | 実行時刻 |
 
 ---
 
-## 実装方針
-
-### フェーズ1: 書式パーサーとSlackスレッド読み取り
-
-**ゴール:** `[project][task]` + スレッドの `:wip`/`:done` を読み取ってログ出力できる
-
-- [ ] 親投稿のパース: `[project_name][task_name]` 形式を正規表現で抽出
-- [ ] スレッド返信の取得: `conversations.replies` API
-- [ ] `:wip`/`:done` ペアの抽出ロジック（ペアが崩れている場合はエラー）
-- [ ] `domain/message.go` を拡張（`ThreadMessage`, `TaskSession` 等）
-- [ ] `infrastructure/slack/source_repository.go` にスレッド取得を追加
-
-### フェーズ2: プロジェクトマッピング
-
-**ゴール:** `[project_name]` をTogglのプロジェクトIDに変換できる
-
-- [ ] `config.toml.tmpl` にプロジェクトマッピングを追加
-  ```toml
-  [toggl.projects]
-  backend  = 123456789
-  frontend = 987654321
-  ```
-- [ ] マッピングにないプロジェクト名はWARNログを出してプロジェクト未指定で登録
-
-### フェーズ3: 重複登録防止
-
-**ゴール:** `make run` を複数回実行しても同じエントリが二重登録されない
-
-- [ ] ローカルにstate fileを保持（`.sync_state.json`）
-  ```json
-  {
-    "synced": [
-      {"thread_ts": "1234567890.000100", "wip_ts": "1234567890.000200", "done_ts": "1234567890.000300"}
-    ]
-  }
-  ```
-- [ ] 実行時にstate fileを読み込み、登録済みのペアをスキップ
-- [ ] 登録成功後にstate fileを更新
-- [ ] state fileは `.gitignore` に追加
-
----
-
-## ドメインモデルの変化
+## ドメインモデル
 
 ```
 v0.1: SourceMessage { Text, Timestamp }
-         ↓ 1:1
-      TimeEntry { Description, Start, End }
 
-v0.2: ParentMessage { ProjectName, TaskName, ThreadTS }
-         ↓ 1:N（スレッド）
-      TaskSession { WipTS, DoneTS }
-         ↓ 1:1
-      TimeEntry { Description, Start, End, ProjectID }
+v0.2: SourceMessage { Text, Timestamp, MessageID } ← MessageID追加（スレッド取得に使う）
+      ParentMessage { ProjectName, TaskName, MessageID }
+      TaskSession   { Start, End }                  ← :wip/:done/:todo から組み立て
+      TimeEntry     { Description, Start, End, ProjectID }
 ```
 
 ---
 
-## レイヤー責務の整理（v0.1の反省）
+## フェーズ1: 書式パーサーとスレッド読み取り
 
-v0.1では Repository のメソッドにビジネスロジックが混入していた。v0.2では以下の責務分担を徹底する。
+**ゴール:** `go run .` で `[project][task]` + `:wip`/`:done` をパースしてログ出力できる
 
-### Repository（infrastructure層）が持つべきもの
-- 外部APIを叩いて生データを取得する
-- 生データをドメインオブジェクトに変換する（マッピングのみ）
-- ページネーションなどAPIの都合による処理
+### domain/message.go
+- `ParentMessage` 構造体を追加
+  ```go
+  type ParentMessage struct {
+      ProjectName string
+      TaskName    string
+      MessageID   string // スレッド取得時のIDとして使う
+  }
+  ```
+- `ParseParentMessage(msg SourceMessage) (*ParentMessage, bool)` を追加
+  - `[project][task]` 形式を正規表現で抽出
+  - マッチしない場合は `false` を返す（スキップ）
 
-```go
-// 薄いRepositoryのイメージ
-type SourceRepository interface {
-    FindMessages(ctx, oldest, latest time.Time) ([]*SourceMessage, error)
-    FindThreadReplies(ctx, threadTS string) ([]*SourceMessage, error)
-}
-```
+### domain/task_session.go（新規）
+- `TaskSession` 構造体
+  ```go
+  type TaskSession struct {
+      Start time.Time
+      End   time.Time
+  }
+  ```
+- `BuildSessions(replies []*SourceMessage, now time.Time) ([]*TaskSession, error)` を追加
+  - `:wip`/`:done`/`:todo` のシーケンスからセッションを組み立てる
+  - Bot・システムメッセージの除外もここで行う
 
-### Domain Service が持つべきもの
-- 今日の時刻範囲の計算
-- Bot/システムメッセージのフィルタリング
-- `[project][task]` 形式のパース
-- `:wip`/`:done`/`:todo` ペアの抽出とセッション構築
-- 中断・未完了セッションのエラー処理・補完ロジック
+### domain/source_repository.go
+- インターフェースを変更
+  ```go
+  type SourceRepository interface {
+      FindMessages(ctx context.Context, oldest, latest time.Time) ([]*SourceMessage, error)
+      FindThreadReplies(ctx context.Context, threadTS string) ([]*SourceMessage, error)
+  }
+  ```
+
+### domain/sync_service.go
+- `SyncToday` のロジックを全面的に書き直す
+  1. 今日の時刻範囲を計算（ここで行う）
+  2. `FindMessages` で親投稿一覧を取得
+  3. 各メッセージを `ParseParentMessage` でパース（マッチしないものはスキップ）
+  4. 各 `ParentMessage` に対して `FindThreadReplies` でスレッド取得
+  5. `BuildSessions` でセッション組み立て
+  6. `TimeEntry` に変換して Toggl に登録
+
+### infrastructure/slack/source_repository.go
+- `FindMessages` に変更（時刻範囲は引数で受け取るだけ）
+- `FindThreadReplies` を追加
+- Bot・システムメッセージの除外を**削除**（ドメイン層に移す）
 
 ---
 
-## v0.3以降の展望（今回スコープ外）
+## フェーズ2: プロジェクトマッピング
 
-- 絵文字リアクションによる `:wip`/`:done` 対応（定期実行でリアクションを常時観測する方式）
-- 作業中（`:wip` だけあって `:done` がまだない）エントリの扱い（実行時刻までを暫定登録など）
-- Toggl APIでプロジェクト一覧を取得してマッピングを自動生成
-- テストの整備
+**ゴール:** `[project_name]` から Toggl の Project ID を解決できる
+
+### config/config.toml.tmpl
+```toml
+[toggl.projects]
+backend  = ${TOGGL_PROJECT_BACKEND:-0}
+frontend = ${TOGGL_PROJECT_FRONTEND:-0}
+```
+
+### config/config.go
+- `Toggl.Projects` を `map[string]int64` で追加
+
+### domain/sync_service.go
+- `ProjectID int64` の代わりに `ProjectMap map[string]int64` を持つ
+- `[project_name]` で引いてヒットしなければ `slog.Warn` を出してプロジェクト未指定（0）で登録
+
+---
+
+## フェーズ3: 重複登録防止
+
+**ゴール:** `go run .` を複数回実行しても同じエントリが二重登録されない
+
+### infrastructure/state/state_repository.go（新規）
+- `.sync_state.json` をローカルファイルとして読み書き
+  ```go
+  type SyncedSession struct {
+      ThreadTS string `json:"thread_ts"`
+      WipTS    string `json:"wip_ts"`
+      EndTS    string `json:"end_ts"`
+  }
+  ```
+- `IsRegistered(threadTS, wipTS, endTS string) bool`
+- `MarkRegistered(threadTS, wipTS, endTS string) error`
+
+### domain/sync_service.go
+- `StateRepository` を依存に追加
+- Toggl 登録前に `IsRegistered` でチェック、登録後に `MarkRegistered`
+
+### .gitignore
+- `.sync_state.json` を追加
