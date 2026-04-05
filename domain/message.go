@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -21,13 +22,17 @@ type ParentMessage struct {
 	MessageID   string
 }
 
-var parentMessageRegex = regexp.MustCompile(`^\[(.*?)\]\[(.+?)\]`)
+var parentMessageRegex = regexp.MustCompile(`(?m)^PJ:\s*(.*?)\s*\nタスク:\s*(.+?)\s*$`)
 
-// ParseParentMessage SourceMessageを[project][task]形式としてパースする。
-// projectは空文字も許容する（[][task]でプロジェクト未指定）。
+// ParseParentMessage SourceMessageの最初の2行をPJ:/タスク:形式としてパースする。
+// 3行目以降は無視する。PJは空文字も許容（プロジェクト未指定）。
 // マッチしない場合はfalseを返す。
 func ParseParentMessage(msg *SourceMessage) (*ParentMessage, bool) {
-	matches := parentMessageRegex.FindStringSubmatch(msg.Text)
+	// 最初の2行だけを対象にする
+	lines := strings.SplitN(msg.Text, "\n", 3)
+	target := strings.Join(lines[:min(2, len(lines))], "\n")
+
+	matches := parentMessageRegex.FindStringSubmatch(target)
 	if matches == nil {
 		return nil, false
 	}
@@ -36,6 +41,13 @@ func ParseParentMessage(msg *SourceMessage) (*ParentMessage, bool) {
 		TaskName:    matches[2],
 		MessageID:   msg.MessageID,
 	}, true
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func ParseSlackTimestamp(ts string) (time.Time, error) {
