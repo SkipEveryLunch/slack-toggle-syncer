@@ -3,10 +3,9 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type SyncService interface {
@@ -17,7 +16,6 @@ type SyncServiceImpl struct {
 	SourceRepo SourceRepository
 	TogglRepo  TogglRepository
 	ProjectID  int64
-	Logger     *zap.Logger
 }
 
 func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
@@ -26,7 +24,7 @@ func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
 		return fmt.Errorf("SourceRepo.FindTodayMessages: %w", err)
 	}
 	if len(messages) == 0 {
-		s.Logger.Info("no messages found today")
+		slog.Info("no messages found today")
 		return nil
 	}
 
@@ -41,10 +39,10 @@ func (s *SyncServiceImpl) SyncToday(ctx context.Context) error {
 		if err := s.TogglRepo.CreateTimeEntry(ctx, entry); err != nil {
 			return fmt.Errorf("TogglRepo.CreateTimeEntry: %w", err)
 		}
-		s.Logger.Info("created time entry",
-			zap.String("description", entry.Description),
-			zap.Time("start", entry.Start),
-			zap.Time("end", entry.End),
+		slog.Info("created time entry",
+			"description", entry.Description,
+			"start", entry.Start.Format("15:04"),
+			"end", entry.End.Format("15:04"),
 		)
 	}
 	return nil

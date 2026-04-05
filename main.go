@@ -3,9 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"os"
-
-	"go.uber.org/zap"
 
 	"github.com/SkipEveryLunch/slack-toggle-syncer/application"
 	"github.com/SkipEveryLunch/slack-toggle-syncer/config"
@@ -25,12 +24,6 @@ func main() {
 		log.Fatalf("config.New: %v", err)
 	}
 
-	logger, err := zap.NewProduction()
-	if err != nil {
-		log.Fatalf("zap.NewProduction: %v", err)
-	}
-	defer logger.Sync()
-
 	sourceRepo := infra_slack.NewSourceRepository(cfg.Slack)
 	togglRepo := infra_toggl.NewTogglRepository(cfg.Toggl)
 
@@ -38,15 +31,15 @@ func main() {
 		SourceRepo: sourceRepo,
 		TogglRepo:  togglRepo,
 		ProjectID:  cfg.Toggl.ProjectID,
-		Logger:     logger,
 	}
 
 	usecase := &application.SyncUsecase{SyncService: syncService}
 
 	ctx := context.Background()
 	if err := usecase.Run(ctx); err != nil {
-		logger.Fatal("usecase.Run", zap.Error(err))
+		slog.Error("usecase.Run", "error", err)
+		os.Exit(1)
 	}
 
-	logger.Info("sync completed")
+	slog.Info("sync completed")
 }
