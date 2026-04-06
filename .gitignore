@@ -1,5 +1,3 @@
 /cannonical/*
-.env
 config.toml
 config/projects.toml
-.envrc
