@@ -31,7 +31,7 @@ func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.Delet
 	now := time.Now().In(domain.JST)
 	today := now.Format("2006-01-02")
 	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
-	url := fmt.Sprintf("%s/me/time_entries?start_date=%s&end_date=%s", baseURL, today, tomorrow)
+	url := fmt.Sprintf("%s/workspaces/%d/time_entries?start_date=%s&end_date=%s", baseURL, r.workspaceID, today, tomorrow)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
