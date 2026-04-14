@@ -63,11 +63,9 @@ func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.Delet
 		return nil, fmt.Errorf("json.Decode: %w", err)
 	}
 
-	var entries []*domain.DeleteTogglEntry
-	for _, e := range raw {
-		if e.WorkspaceID == r.workspaceID {
-			entries = append(entries, &domain.DeleteTogglEntry{ID: e.ID})
-		}
+	entries := make([]*domain.DeleteTogglEntry, len(raw))
+	for i, e := range raw {
+		entries[i] = &domain.DeleteTogglEntry{ID: e.ID, WorkspaceID: e.WorkspaceID}
 	}
 	return entries, nil
 }

@@ -43,9 +43,10 @@ func main() {
 		}
 
 		usecase := &application.SyncUsecase{
-			SlackRepo: sourceRepo,
-			TogglRepo: togglRepo,
-			Projects:  projects,
+			SlackRepo:   sourceRepo,
+			TogglRepo:   togglRepo,
+			Projects:    projects,
+			WorkspaceID: cfg.Toggl.WorkspaceID,
 		}
 		if err := usecase.Run(ctx); err != nil {
 			slog.Error("usecase.Run", "error", err)

@@ -10,9 +10,10 @@ import (
 )
 
 type SyncUsecase struct {
-	SlackRepo domain.SourceRepository
-	TogglRepo domain.TogglRepository
-	Projects  map[domain.ProjectName]domain.ProjectID
+	SlackRepo   domain.SourceRepository
+	TogglRepo   domain.TogglRepository
+	Projects    map[domain.ProjectName]domain.ProjectID
+	WorkspaceID int64
 }
 
 func (u *SyncUsecase) Run(ctx context.Context) error {
@@ -20,11 +21,20 @@ func (u *SyncUsecase) Run(ctx context.Context) error {
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, domain.JST)
 
 	// 1. 今日の Toggl エントリを削除
+	// FindTodayEntriesは、ユーザーの全ワークスペースのエントリを返す
 	existing, err := u.TogglRepo.FindTodayEntries(ctx)
 	if err != nil {
 		return fmt.Errorf("togglRepo.FindTodayEntries: %w", err)
 	}
+
+	// 対象のワークスペースのエントリのみ削除対象
+	var entriesToDelete []*domain.DeleteTogglEntry
 	for _, e := range existing {
+		if e.WorkspaceID == u.WorkspaceID {
+			entriesToDelete = append(entriesToDelete, e)
+		}
+	}
+	for _, e := range entriesToDelete {
 		if err := u.TogglRepo.DeleteEntry(ctx, e.ID); err != nil {
 			return fmt.Errorf("togglRepo.DeleteEntry (id=%d): %w", e.ID, err)
 		}

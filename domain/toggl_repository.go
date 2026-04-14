@@ -3,7 +3,8 @@ package domain
 import "context"
 
 type DeleteTogglEntry struct {
-	ID int64
+	ID          int64
+	WorkspaceID int64
 }
 
 type TogglRepository interface {
