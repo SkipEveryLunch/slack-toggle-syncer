@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/SkipEveryLunch/slack-toggle-syncer/config"
@@ -29,11 +30,15 @@ func NewTogglRepository(cfg config.Toggl) domain.TogglRepository {
 
 func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.DeleteTogglEntry, error) {
 	now := time.Now().In(domain.JST)
-	today := now.Format("2006-01-02")
-	tomorrow := now.AddDate(0, 0, 1).Format("2006-01-02")
-	url := fmt.Sprintf("%s/workspaces/%d/time_entries?start_date=%s&end_date=%s", baseURL, r.workspaceID, today, tomorrow)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, domain.JST)
+	endOfDay := startOfDay.AddDate(0, 0, 1).Add(-time.Second)
+	endpoint := fmt.Sprintf("%s/me/time_entries?start_date=%s&end_date=%s",
+		baseURL,
+		url.QueryEscape(startOfDay.Format(time.RFC3339)),
+		url.QueryEscape(endOfDay.Format(time.RFC3339)),
+	)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("http.NewRequest: %w", err)
 	}
@@ -51,15 +56,18 @@ func (r *togglRepository) FindTodayEntries(ctx context.Context) ([]*domain.Delet
 	}
 
 	var raw []struct {
-		ID int64 `json:"id"`
+		ID          int64 `json:"id"`
+		WorkspaceID int64 `json:"workspace_id"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("json.Decode: %w", err)
 	}
 
-	entries := make([]*domain.DeleteTogglEntry, len(raw))
-	for i, e := range raw {
-		entries[i] = &domain.DeleteTogglEntry{ID: e.ID}
+	var entries []*domain.DeleteTogglEntry
+	for _, e := range raw {
+		if e.WorkspaceID == r.workspaceID {
+			entries = append(entries, &domain.DeleteTogglEntry{ID: e.ID})
+		}
 	}
 	return entries, nil
 }
