@@ -62,7 +62,7 @@ func (u *SyncUsecase) Run(ctx context.Context) error {
 			return err
 		}
 
-		for _, entry := range task.ToTogglEntries() {
+		for _, entry := range toTogglEntries(task) {
 			if err := u.TogglRepo.CreateTogglEntry(ctx, entry); err != nil {
 				return fmt.Errorf("togglRepo.CreateTogglEntry: %w", err)
 			}
@@ -74,4 +74,17 @@ func (u *SyncUsecase) Run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func toTogglEntries(task *domain.SlackTask) []*domain.TogglEntry {
+	entries := make([]*domain.TogglEntry, 0, len(task.Sessions))
+	for _, s := range task.Sessions {
+		entries = append(entries, &domain.TogglEntry{
+			Description: task.Description,
+			Start:       s.Start,
+			End:         s.End,
+			ProjectID:   task.ProjectID,
+		})
+	}
+	return entries
 }

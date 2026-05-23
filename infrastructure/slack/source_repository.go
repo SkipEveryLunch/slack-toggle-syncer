@@ -47,15 +47,11 @@ func (r *sourceRepository) FindMessages(ctx context.Context, oldest, latest time
 
 	outs := make([]*domain.SourceMessage, 0, len(allMessages))
 	for _, msg := range allMessages {
-		ts, err := domain.ParseSlackTimestamp(msg.Timestamp)
+		sm, err := toSourceMessage(msg)
 		if err != nil {
-			return nil, fmt.Errorf("domain.ParseSlackTimestamp: %w", err)
+			return nil, err
 		}
-		outs = append(outs, &domain.SourceMessage{
-			Text:      msg.Text,
-			Timestamp: ts,
-			MessageID: msg.Timestamp,
-		})
+		outs = append(outs, sm)
 	}
 	return outs, nil
 }
@@ -76,15 +72,23 @@ func (r *sourceRepository) FindThreadReplies(ctx context.Context, messageID stri
 
 	outs := make([]*domain.SourceMessage, 0, len(replies)-1)
 	for _, msg := range replies[1:] {
-		ts, err := domain.ParseSlackTimestamp(msg.Timestamp)
+		sm, err := toSourceMessage(msg)
 		if err != nil {
-			return nil, fmt.Errorf("domain.ParseSlackTimestamp: %w", err)
+			return nil, err
 		}
-		outs = append(outs, &domain.SourceMessage{
-			Text:      msg.Text,
-			Timestamp: ts,
-			MessageID: msg.Timestamp,
-		})
+		outs = append(outs, sm)
 	}
 	return outs, nil
+}
+
+func toSourceMessage(msg slack.Message) (*domain.SourceMessage, error) {
+	ts, err := domain.ParseSlackTimestamp(msg.Timestamp)
+	if err != nil {
+		return nil, fmt.Errorf("domain.ParseSlackTimestamp: %w", err)
+	}
+	return &domain.SourceMessage{
+		Text:      msg.Text,
+		Timestamp: ts,
+		MessageID: msg.Timestamp,
+	}, nil
 }

@@ -102,15 +102,7 @@ type createTimeEntryRequest struct {
 }
 
 func (r *togglRepository) CreateTogglEntry(ctx context.Context, entry *domain.TogglEntry) error {
-	body := createTimeEntryRequest{
-		Description: entry.Description,
-		Start:       entry.Start.Format("2006-01-02T15:04:05-07:00"),
-		Stop:        entry.End.Format("2006-01-02T15:04:05-07:00"),
-		Duration:    int64(entry.End.Sub(entry.Start).Seconds()),
-		WorkspaceID: r.workspaceID,
-		ProjectID:   int64(entry.ProjectID),
-		CreatedWith: "slack-toggle-syncer",
-	}
+	body := toCreateRequest(entry, r.workspaceID)
 
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -136,4 +128,16 @@ func (r *togglRepository) CreateTogglEntry(ctx context.Context, entry *domain.To
 		return fmt.Errorf("toggl API error: status=%d body=%s", resp.StatusCode, string(b))
 	}
 	return nil
+}
+
+func toCreateRequest(entry *domain.TogglEntry, workspaceID int64) createTimeEntryRequest {
+	return createTimeEntryRequest{
+		Description: entry.Description,
+		Start:       entry.Start.Format("2006-01-02T15:04:05-07:00"),
+		Stop:        entry.End.Format("2006-01-02T15:04:05-07:00"),
+		Duration:    int64(entry.End.Sub(entry.Start).Seconds()),
+		WorkspaceID: workspaceID,
+		ProjectID:   int64(entry.ProjectID),
+		CreatedWith: "slack-toggle-syncer",
+	}
 }

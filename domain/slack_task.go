@@ -6,9 +6,9 @@ import (
 )
 
 type SlackTask struct {
-	description string
-	projectID   ProjectID
-	sessions    []*TaskSession
+	Description string
+	ProjectID   ProjectID
+	Sessions    []*TaskSession
 }
 
 // NewSlackTask は ParentMessage・スレッド返信・プロジェクトマップから SlackTask を構築する。
@@ -27,21 +27,8 @@ func NewSlackTask(
 		projectID = id
 	}
 	return &SlackTask{
-		description: parent.TaskName,
-		projectID:   projectID,
-		sessions:    BuildSessions(replies, now),
+		Description: parent.TaskName,
+		ProjectID:   projectID,
+		Sessions:    BuildSessions(replies, now),
 	}, nil
-}
-
-func (t *SlackTask) ToTogglEntries() []*TogglEntry {
-	entries := make([]*TogglEntry, 0, len(t.sessions))
-	for _, s := range t.sessions {
-		entries = append(entries, &TogglEntry{
-			Description: t.description,
-			Start:       s.Start,
-			End:         s.End,
-			ProjectID:   t.projectID,
-		})
-	}
-	return entries
 }
