@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"log/slog"
 	"os"
@@ -10,7 +11,9 @@ import (
 	"github.com/SkipEveryLunch/slack-toggle-syncer/config"
 	"github.com/SkipEveryLunch/slack-toggle-syncer/domain"
 	infra_slack "github.com/SkipEveryLunch/slack-toggle-syncer/infrastructure/slack"
+	infra_sqlite "github.com/SkipEveryLunch/slack-toggle-syncer/infrastructure/sqlite"
 	infra_toggl "github.com/SkipEveryLunch/slack-toggle-syncer/infrastructure/toggl"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -25,9 +28,20 @@ func main() {
 	}
 
 	if len(os.Args) < 2 {
-		log.Fatalf("usage: %s <command> (available: sync, report)", os.Args[0])
+		log.Fatalf("usage: %s <command> (available: sync, report, todos)", os.Args[0])
 	}
 	cmd := os.Args[1]
+
+	db, err := sql.Open("sqlite", cfg.Main.DBPath)
+	if err != nil {
+		log.Fatalf("sql.Open: %v", err)
+	}
+	defer db.Close()
+
+	todoRepo, err := infra_sqlite.NewTodoRepository(db)
+	if err != nil {
+		log.Fatalf("infra_sqlite.NewTodoRepository: %v", err)
+	}
 
 	sourceRepo := infra_slack.NewSourceRepository(cfg.Slack)
 
@@ -45,6 +59,7 @@ func main() {
 		usecase := &application.SyncUsecase{
 			SlackRepo:   sourceRepo,
 			TogglRepo:   togglRepo,
+			TodoRepo:    todoRepo,
 			Projects:    projects,
 			WorkspaceID: cfg.Toggl.WorkspaceID,
 		}
@@ -63,7 +78,16 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "todos":
+		usecase := &application.TodosUsecase{
+			TodoRepo: todoRepo,
+		}
+		if err := usecase.Run(ctx); err != nil {
+			slog.Error("usecase.Run", "error", err)
+			os.Exit(1)
+		}
+
 	default:
-		log.Fatalf("unknown command: %s (available: sync, report)", cmd)
+		log.Fatalf("unknown command: %s (available: sync, report, todos)", cmd)
 	}
 }

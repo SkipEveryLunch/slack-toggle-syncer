@@ -12,6 +12,7 @@ import (
 type SyncUsecase struct {
 	SlackRepo   domain.SourceRepository
 	TogglRepo   domain.TogglRepository
+	TodoRepo    domain.TodoRepository
 	Projects    map[domain.ProjectName]domain.ProjectID
 	WorkspaceID int64
 }
@@ -71,6 +72,16 @@ func (u *SyncUsecase) Run(ctx context.Context) error {
 				"start", entry.Start.Format("15:04"),
 				"end", entry.End.Format("15:04"),
 			)
+		}
+
+		if task.Done {
+			if err := u.TodoRepo.Delete(ctx, task.Description); err != nil {
+				return fmt.Errorf("todoRepo.Delete: %w", err)
+			}
+		} else {
+			if err := u.TodoRepo.Upsert(ctx, task.Description); err != nil {
+				return fmt.Errorf("todoRepo.Upsert: %w", err)
+			}
 		}
 	}
 	return nil

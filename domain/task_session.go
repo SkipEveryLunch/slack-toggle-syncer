@@ -39,9 +39,11 @@ func resolveTime(reply *SourceMessage) time.Time {
 // 各返信の1行目だけをマーカーとして認識し、2行目以降は無視する。
 // ステートマシンで処理し、完了/中断のない開始は実行時刻nowで締める。
 // 開始/中断/完了の後にhh:mm形式の時刻を書くとSlackのタイムスタンプより優先される。
-func BuildSessions(replies []*SourceMessage, now time.Time) []*TaskSession {
+// 返り値の bool は done を表す（最後のセッションが完了マーカーで締まりかつ開きっぱなしのセッションなし）。
+func BuildSessions(replies []*SourceMessage, now time.Time) ([]*TaskSession, bool) {
 	var sessions []*TaskSession
 	var currentStart time.Time // ゼロ値 = idle状態
+	lastWasComplete := false
 
 	for _, reply := range replies {
 		firstLine := strings.SplitN(reply.Text, "\n", 2)[0]
@@ -53,13 +55,23 @@ func BuildSessions(replies []*SourceMessage, now time.Time) []*TaskSession {
 				sessions = append(sessions, &TaskSession{Start: currentStart, End: t})
 			}
 			currentStart = t
-		case isMarker(firstLine, "完了"), isMarker(firstLine, "中断"):
+			lastWasComplete = false
+		case isMarker(firstLine, "完了"):
 			if currentStart.IsZero() {
-				slog.Warn("found 完了/中断 without 開始, skipping", "timestamp", reply.Timestamp)
+				slog.Warn("found 完了 without 開始, skipping", "timestamp", reply.Timestamp)
 				continue
 			}
 			sessions = append(sessions, &TaskSession{Start: currentStart, End: resolveTime(reply)})
 			currentStart = time.Time{} // idle状態に戻す
+			lastWasComplete = true
+		case isMarker(firstLine, "中断"):
+			if currentStart.IsZero() {
+				slog.Warn("found 中断 without 開始, skipping", "timestamp", reply.Timestamp)
+				continue
+			}
+			sessions = append(sessions, &TaskSession{Start: currentStart, End: resolveTime(reply)})
+			currentStart = time.Time{} // idle状態に戻す
+			lastWasComplete = false
 		}
 		// 上記以外のテキスト（メモ等）はスキップ
 	}
@@ -67,9 +79,10 @@ func BuildSessions(replies []*SourceMessage, now time.Time) []*TaskSession {
 	// ループ終了時にまだin_progress → 実行時刻で締める
 	if !currentStart.IsZero() {
 		sessions = append(sessions, &TaskSession{Start: currentStart, End: now})
+		lastWasComplete = false
 	}
 
-	return sessions
+	return sessions, lastWasComplete
 }
 
 // isMarker テキストの1行目が指定マーカーで始まるかチェックする（後ろにhh:mmが続く場合も許容）。

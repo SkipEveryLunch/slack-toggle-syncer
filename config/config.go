@@ -18,6 +18,7 @@ type Config struct {
 
 type Main struct {
 	LogLevel string `toml:"log_level" validate:"required,oneof=debug info warn error"`
+	DBPath   string `toml:"db_path"   validate:"required"`
 }
 
 type Slack struct {

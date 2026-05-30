@@ -9,6 +9,7 @@ type SlackTask struct {
 	Description string
 	ProjectID   ProjectID
 	Sessions    []*TaskSession
+	Done        bool
 }
 
 // NewSlackTask は ParentMessage・スレッド返信・プロジェクトマップから SlackTask を構築する。
@@ -26,9 +27,11 @@ func NewSlackTask(
 		}
 		projectID = id
 	}
+	sessions, done := BuildSessions(replies, now)
 	return &SlackTask{
 		Description: parent.TaskName,
 		ProjectID:   projectID,
-		Sessions:    BuildSessions(replies, now),
+		Sessions:    sessions,
+		Done:        done,
 	}, nil
 }
