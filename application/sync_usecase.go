@@ -75,11 +75,11 @@ func (u *SyncUsecase) Run(ctx context.Context) error {
 		}
 
 		if task.Done {
-			if err := u.TodoRepo.Delete(ctx, task.Description); err != nil {
+			if err := u.TodoRepo.Delete(ctx, parent.ProjectName, task.Description); err != nil {
 				return fmt.Errorf("todoRepo.Delete: %w", err)
 			}
 		} else {
-			if err := u.TodoRepo.Upsert(ctx, task.Description); err != nil {
+			if err := u.TodoRepo.Upsert(ctx, parent.ProjectName, task.Description); err != nil {
 				return fmt.Errorf("todoRepo.Upsert: %w", err)
 			}
 		}
