@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/SkipEveryLunch/slack-toggle-syncer/domain"
@@ -26,7 +27,11 @@ func (u *ReportUsecase) Run(ctx context.Context) error {
 	projectTasks := make(map[string][]string)
 	var otherTasks []string
 
-	for _, msg := range messages {
+	// Slack APIは新しい順で返すため、古い順に並び替えてから処理する
+	reversedMessages := slices.Clone(messages) // 厳密には定義時点でreversedではないが許容
+	slices.Reverse(reversedMessages)
+
+	for _, msg := range reversedMessages {
 		parent, ok := domain.ParseParentMessage(msg)
 		if !ok {
 			// パースできないメッセージ（感想や雑談など）はスキップ
