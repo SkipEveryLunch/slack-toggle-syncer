@@ -22,41 +22,19 @@ func (u *ReportUsecase) Run(ctx context.Context) error {
 		return fmt.Errorf("slackRepo.FindMessages: %w", err)
 	}
 
-	// プロジェクトごとにタスク名の配列を持つMap。
-	// GoのMapは順番を保証しないため、出力時の順番は不定。
-	projectTasks := make(map[string][]string)
-	var otherTasks []string
-
 	// Slack APIは新しい順で返すため、古い順に並び替えてから処理する
 	reversedMessages := sliceutil.Reversed(messages)
 
+	summary := domain.NewTaskSummary()
 	for _, msg := range reversedMessages {
 		parent, ok := domain.ParseParentMessage(msg)
 		if !ok {
 			// パースできないメッセージ（感想や雑談など）はスキップ
 			continue
 		}
-
-		if parent.ProjectName == "" {
-			otherTasks = append(otherTasks, parent.TaskName)
-		} else {
-			projectTasks[parent.ProjectName] = append(projectTasks[parent.ProjectName], parent.TaskName)
-		}
+		summary.Add(parent.ProjectName, parent.TaskName)
 	}
 
-	fmt.Println("*今日やったこと*")
-	for proj, tasks := range projectTasks {
-		fmt.Println("*" + proj + "*")
-		for _, task := range tasks {
-			fmt.Println("- " + task)
-		}
-	}
-	if len(otherTasks) > 0 {
-		fmt.Println("*その他*")
-		for _, task := range otherTasks {
-			fmt.Println("- " + task)
-		}
-	}
-
+	fmt.Println(summary.Render("今日やったこと"))
 	return nil
 }

@@ -21,28 +21,11 @@ func (u *TodosUsecase) Run(ctx context.Context) error {
 	// FindAllはid昇順だが、idは新→古の順で採番されているため反転して古い順にする
 	reversedTodos := sliceutil.Reversed(todos)
 
-	projectTasks := make(map[string][]string)
-	var otherTasks []string
+	summary := domain.NewTaskSummary()
 	for _, t := range reversedTodos {
-		if t.ProjectName == "" {
-			otherTasks = append(otherTasks, t.TaskName)
-		} else {
-			projectTasks[t.ProjectName] = append(projectTasks[t.ProjectName], t.TaskName)
-		}
+		summary.Add(t.ProjectName, t.TaskName)
 	}
 
-	fmt.Println("*未完了タスク*")
-	for proj, tasks := range projectTasks {
-		fmt.Println("*" + proj + "*")
-		for _, task := range tasks {
-			fmt.Println("- " + task)
-		}
-	}
-	if len(otherTasks) > 0 {
-		fmt.Println("*その他*")
-		for _, task := range otherTasks {
-			fmt.Println("- " + task)
-		}
-	}
+	fmt.Println(summary.Render("未完了タスク"))
 	return nil
 }
