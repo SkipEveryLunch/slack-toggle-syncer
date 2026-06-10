@@ -3,10 +3,10 @@ package application
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/SkipEveryLunch/slack-toggle-syncer/domain"
+	"github.com/SkipEveryLunch/slack-toggle-syncer/internal/sliceutil"
 )
 
 type ReportUsecase struct {
@@ -28,8 +28,7 @@ func (u *ReportUsecase) Run(ctx context.Context) error {
 	var otherTasks []string
 
 	// Slack APIは新しい順で返すため、古い順に並び替えてから処理する
-	reversedMessages := slices.Clone(messages) // 厳密には定義時点でreversedではないが許容
-	slices.Reverse(reversedMessages)
+	reversedMessages := sliceutil.Reversed(messages)
 
 	for _, msg := range reversedMessages {
 		parent, ok := domain.ParseParentMessage(msg)
