@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/SkipEveryLunch/slack-toggle-syncer/domain"
+	"github.com/SkipEveryLunch/slack-toggle-syncer/internal/sliceutil"
 )
 
 type TodosUsecase struct {
@@ -17,9 +18,12 @@ func (u *TodosUsecase) Run(ctx context.Context) error {
 		return fmt.Errorf("todoRepo.FindAll: %w", err)
 	}
 
+	// FindAllはid昇順だが、idは新→古の順で採番されているため反転して古い順にする
+	reversedTodos := sliceutil.Reversed(todos)
+
 	projectTasks := make(map[string][]string)
 	var otherTasks []string
-	for _, t := range todos {
+	for _, t := range reversedTodos {
 		if t.ProjectName == "" {
 			otherTasks = append(otherTasks, t.TaskName)
 		} else {
